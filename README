@@ -1,0 +1,31 @@
+This is a plist editor graphic tool. 
+
+It writted by qt4.
+
+This tool is often used by game maker. It make a plist file and an image which contain picture stuff that used in game. Now it work fine with cocos2dx. 
+
+If you have any problem in using this tool, please contact me. My email is <newma@live.cn>. Suggestion is welcome.
+
+Here is the directory descript:
+------------------------------------------------------
+
+<3dpart>        the third parts libraries
+
+<bin>           compile result files, executable files and object files      
+
+<include>       global header files
+        <io>    IO header files
+
+<src>           source code files
+        <core>  core data struct.
+        <io>    io reader and writer files.
+        <ui>    ui files
+
+<project>       all platmat project files
+
+<res>           qt resource files
+ 
+------------------------------------------------------
+
+Finally, thank to Animetrics Inc. The plist xml io module using his code.
+ 
