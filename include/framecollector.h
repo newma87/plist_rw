@@ -97,7 +97,7 @@ class NormalAlignAlgorithm
 {
 public:
     enum {
-        algin_lenth = 3   // align base lenth (pixel)
+        algin_lenth = 5   // align base lenth (pixel)
     };
 
     static QRect findPropertyPlace(const FrameCollector& collector, const QPoint& mousePos, const QSize& imageSize);

@@ -324,16 +324,43 @@ QRect NormalAlignAlgorithm::findPropertyPlace(const FrameCollector &collector, c
     int transX = 0;
     int transY = 0;
 
-    // vertical align
-    if (!NormalAlignAlgorithm::nearAlign(adjRect.top(), adjRect.bottom(), conflictRect.top(), &transY))
-    {
-        NormalAlignAlgorithm::nearAlign(adjRect.top(), adjRect.bottom(), conflictRect.bottom(), &transY);
-    }
+    QPoint distance = adjRect.center() - conflictRect.center();
 
-    //horizontal align
-    if (!NormalAlignAlgorithm::nearAlign(adjRect.left(), adjRect.right(), conflictRect.left(), &transX))
+    if (distance.x() * distance.x() >= distance.y() * distance.y())
     {
-        NormalAlignAlgorithm::nearAlign(adjRect.left(), adjRect.right(), conflictRect.right(), &transX);
+        if (distance.x() < 0)
+        {
+            transX = conflictRect.left() - adjRect.right() - 1;
+        }
+        else
+        {
+            transX = conflictRect.right() + 1 - adjRect.left();
+        }
+
+        // vertical align
+        // attention: rect.left() and rect.righ() is still in rect. Otherwise rect.right() - rect.left() = rect().width - 1. The same to top and bottom.
+        if (!NormalAlignAlgorithm::nearAlign(adjRect.top(), adjRect.bottom() + 1, conflictRect.top(), &transY))
+        {
+            NormalAlignAlgorithm::nearAlign(adjRect.top(), adjRect.bottom() + 1, conflictRect.bottom() + 1, &transY);
+        }
+    }
+    else
+    {
+        if (distance.y() < 0)
+        {
+            transY = conflictRect.top() - adjRect.bottom() - 1;
+        }
+        else
+        {
+            transY = conflictRect.bottom() + 1 - adjRect.top();
+        }
+
+        //horizontal align
+        // attention: rect.left() and rect.righ() is still in rect. Otherwise rect.right() - rect.left() = rect().width - 1. The same to top and bottom.
+        if (!NormalAlignAlgorithm::nearAlign(adjRect.left(), adjRect.right() + 1, conflictRect.left(), &transX))
+        {
+            NormalAlignAlgorithm::nearAlign(adjRect.left(), adjRect.right() + 1, conflictRect.right() + 1, &transX);
+        }
     }
 
     if (!collector.findFramesInRect(adjRect.translated(transX, transY)))
