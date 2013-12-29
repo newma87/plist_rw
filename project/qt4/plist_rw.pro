@@ -20,13 +20,13 @@ SOURCES += ../../src/ui/imagelistwidget.cpp \
     ../../src/ui/attributewidget.cpp \
     ../../src/io/pugixml.cpp \
     ../../src/io/plistxmlreader.cpp \
-    ../../src/io/plistxmlwriter.cpp
+    ../../src/io/plistxmlwriter.cpp \
+    ../../src/core/alignalgorithm.cpp \
+    ../../src/ui/settingdialog.cpp
 
 HEADERS  += ../../src/ui/imagelistwidget.h \
     ../../src/ui/mainwindow.h \
     ../../src/ui/workplacewidget.h \
-    ../../include/framecollector.h \
-    ../../include/frame.h \
     ../../src/ui/attributewidget.h \
     ../../include/io/base64.hpp \
     ../../include/io/Plist.hpp \
@@ -34,9 +34,15 @@ HEADERS  += ../../src/ui/imagelistwidget.h \
     ../../include/io/pugiconfig.hpp \
     ../../include/io/pugixml.hpp \
      ../../include/io/plistxmlreader.h \
-    ../../include/io/plistxmlwriter.h
+    ../../include/io/plistxmlwriter.h \
+    ../../src/util/util.h \
+    ../../include/core/alignalgorithm.h \
+    ../../include/core/frame.h \
+    ../../include/core/framecollector.h \
+    ../../src/ui/settingdialog.h
 
-FORMS    += ../../res/mainwindow.ui
+FORMS    += ../../res/mainwindow.ui \
+    ../../res/settingdialog.ui
 
 INCLUDEPATH += ../../include/
 INCLUDEPATH += ../../3dpart/
