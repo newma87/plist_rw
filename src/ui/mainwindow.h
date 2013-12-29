@@ -34,6 +34,7 @@ public slots:
     void clearup();
     void importImages();
     void exportImages();
+    void settings();
 
     void onContentWasModify();
 private:

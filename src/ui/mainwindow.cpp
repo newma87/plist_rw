@@ -9,6 +9,7 @@
 #include "core/frame.h"
 #include "core/framecollector.h"
 #include "mainwindow.h"
+#include "settingdialog.h"
 
 #include "io/plistxmlreader.h"
 #include "io/plistxmlwriter.h"
@@ -22,6 +23,8 @@ MainWindow::MainWindow(QWidget *parent)
     setupMenus();
     setupWidgets();
     setupDockWidgets();
+    statusBar()->show();
+    statusBar()->showMessage(tr("Ready"));
 
     readSettings();
     setCurrentFile("");
@@ -46,7 +49,7 @@ bool MainWindow::open()
 {
     if (checkSaved())
     {
-        QString fileName = QFileDialog::getOpenFileName(this, tr("open plist file"), tr(""), QString("*.plist"));
+        QString fileName = QFileDialog::getOpenFileName(this, tr("Open plist file"), tr(""), QString("*.plist"));
         if (!fileName.isEmpty())
         {
             return loadFile(fileName);
@@ -75,7 +78,7 @@ bool MainWindow::save()
 
 bool MainWindow::saveAs()
 {
-    QString fileName = QFileDialog::getSaveFileName(this, tr("save plist file"));
+    QString fileName = QFileDialog::getSaveFileName(this, tr("Save plist file"));
     if (!fileName.isEmpty())
     {
         return saveFile(fileName);
@@ -86,6 +89,10 @@ bool MainWindow::saveAs()
 void MainWindow::adjustSize()
 {
     m_pFrameCollector->adjustSize(true, false);
+
+    statusBar()->showMessage(tr("New Image Size: %1x%2")
+                             .arg(m_pFrameCollector->getSize().width())
+                             .arg(m_pFrameCollector->getSize().height()));
 }
 
 void MainWindow::clearup()
@@ -96,11 +103,13 @@ void MainWindow::clearup()
     m_pAttrWidget->refresh();
 
     onContentWasModify();
+
+    statusBar()->showMessage(tr("Clear done, file is empty."), 2000);
 }
 
 void MainWindow::importImages()
 {
-    QString directName = QFileDialog::getExistingDirectory(this, tr("import image source"));
+    QString directName = QFileDialog::getExistingDirectory(this, tr("Import image source"));
     if (!directName.isEmpty())
     {
 #ifndef QT_NO_CURSOR
@@ -119,7 +128,7 @@ void MainWindow::importImages()
 
 void MainWindow::exportImages()
 {
-    QString directName = QFileDialog::getExistingDirectory(this, tr("export images"));
+    QString directName = QFileDialog::getExistingDirectory(this, tr("Export images to files"));
     if (!directName.isEmpty())
     {
 #ifndef QT_NO_CURSOR
@@ -142,6 +151,19 @@ void MainWindow::exportImages()
 #ifndef QT_NO_CURSOR
         QApplication::restoreOverrideCursor();
 #endif
+    }
+}
+
+void MainWindow::settings()
+{
+    SettingDialog dlg(this);
+    if (dlg.exec() == QDialog::Accepted)
+    {
+        m_pFrameCollector->setSize(QSize(dlg.getWidth(), dlg.getHeight()));
+
+        statusBar()->showMessage(tr("New Image Size: %1x%2")
+                             .arg(m_pFrameCollector->getSize().width())
+                             .arg(m_pFrameCollector->getSize().height()));
     }
 }
 
@@ -178,6 +200,8 @@ bool MainWindow::loadFile(QString &file)
      QApplication::restoreOverrideCursor();
 #endif
 
+    statusBar()->showMessage(tr("File loaded..."), 2000);
+
     return bRet;
 }
 
@@ -200,12 +224,14 @@ bool MainWindow::saveFile(QString &file)
      QApplication::restoreOverrideCursor();
 #endif
 
+    statusBar()->showMessage(tr("File saved..."), 2000);
     return bRet;
 }
 
 void MainWindow::importImageFiles(QString &directory)
 {
     m_pImageslist->initWithDirectory(directory);
+    statusBar()->showMessage(tr("Images imported..."), 2000);
 }
 
 bool MainWindow::checkSaved()
@@ -255,21 +281,31 @@ void MainWindow::setupActions()
 {
     m_pActionOpen = new QAction(tr("&Open..."), this);
     m_pActionOpen->setShortcut(QKeySequence::Open);
+    m_pActionOpen->setStatusTip(tr("Open a plist file"));
     m_pActionSave = new QAction(tr("&Save..."), this);
     m_pActionSave->setShortcut(QKeySequence::Save);
+    m_pActionSave->setStatusTip(tr("Save this image to plist file"));
     m_pActionSaveAs = new QAction(tr("&SaveAs..."), this);
     m_pActionSaveAs->setShortcut(QKeySequence::SaveAs);
+    m_pActionSaveAs->setStatusTip(tr("Save as a plist file"));
     m_pActionClose = new QAction(tr("&Exit..."), this);
     m_pActionClose->setShortcut(QKeySequence::Close);
+    m_pActionClose->setStatusTip(tr("Exit application"));
     m_pActionImport = new QAction(tr("&Import Images..."), this);
-    m_pActionImport->setToolTip(tr("import image source"));
+    m_pActionImport->setToolTip(tr("Import image source"));
+    m_pActionImport->setStatusTip(tr("Import image source from a directory"));
     m_pActionExport = new QAction(tr("&Export To Images..."), this);
-    m_pActionExport->setToolTip(tr("break current image to pieces and export"));
+    m_pActionExport->setToolTip(tr("Break current image into pieces and export"));
     m_pActionExport->setDisabled(true);
+    m_pActionExport->setStatusTip(tr("Acording to the plist file, break up the group image and saved by each image's name"));
     m_pActionAjustSize = new QAction(tr("&Adjust Size"), this);
-    m_pActionAjustSize->setToolTip(tr("will resize current image in power of 2"));
+    m_pActionAjustSize->setToolTip(tr("will resize current image with power of 2"));
+    m_pActionAjustSize->setStatusTip(tr("Resize current group image into small size with power of 2"));
     m_pActionClear = new QAction(tr("&Clear"), this);
-    m_pActionClear->setToolTip("clear current image");
+    m_pActionClear->setToolTip("Clear current image");
+    m_pActionClear->setStatusTip("Clearup all the image in this plist file");
+    m_pActionSetting = new QAction(tr("&Settings"), this);
+    m_pActionSetting->setStatusTip(tr("Setting size of group image file"));
 
     connect(m_pActionOpen, SIGNAL(triggered()), this, SLOT(open()));
     connect(m_pActionSave, SIGNAL(triggered()), this, SLOT(save()));
@@ -279,6 +315,7 @@ void MainWindow::setupActions()
     connect(m_pActionExport, SIGNAL(triggered()), this, SLOT(exportImages()));
     connect(m_pActionAjustSize, SIGNAL(triggered()), this, SLOT(adjustSize()));
     connect(m_pActionClear, SIGNAL(triggered()), this, SLOT(clearup()));
+    connect(m_pActionSetting, SIGNAL(triggered()), this, SLOT(settings()));
 }
 
 void MainWindow::setupMenus()
@@ -294,6 +331,7 @@ void MainWindow::setupMenus()
     m_pEditMenu = menuBar()->addMenu(tr("&Edit"));
     m_pEditMenu->addAction(m_pActionClear);
     m_pEditMenu->addAction(m_pActionAjustSize);
+    m_pEditMenu->addAction(m_pActionSetting);
 
     m_pWindowMenu = menuBar()->addMenu(tr("&Window"));
 }
@@ -312,14 +350,14 @@ void MainWindow::setupWidgets()
 
 void MainWindow::setupDockWidgets()
 {
-    m_pAttrwidget_dock = new QDockWidget(tr("attribute"), this);
+    m_pAttrwidget_dock = new QDockWidget(tr("Attribute"), this);
     m_pAttrWidget = new AttributeWidget(m_pFrameCollector, this);
     m_pAttrwidget_dock->setWidget(m_pAttrWidget);
     m_pAttrwidget_dock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     addDockWidget(Qt::LeftDockWidgetArea, m_pAttrwidget_dock);
     m_pWindowMenu->addAction(m_pAttrwidget_dock->toggleViewAction());
 
-    m_pImagelist_dock = new QDockWidget(tr("images"), this);
+    m_pImagelist_dock = new QDockWidget(tr("Images"), this);
     m_pImageslist = new ImageListWidget(this);
     m_pImagelist_dock->setWidget(m_pImageslist);
     m_pImagelist_dock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
