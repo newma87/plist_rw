@@ -1,23 +1,14 @@
 /*
- *  frame.h
+ *  util.h
  *  plist_rw version 1.0
  *  author by newma
  *  email to newma@live.cn
  */
+#ifndef UTIL_H
+#define UTIL_H
 
-#ifndef FRAME_H
-#define FRAME_H
-
-#include <QPixmap>
-#include <QString>
-#include <QRect>
-
-struct Frame
-{
-    QPixmap image;
-    QString name;
-    QRect rect;
-};
+#define MAX(a, b) ((a) >= (b) ? (a) : (b))
+#define MIN(a, b) ((a) <= (b) ? (a) : (b))
 
 inline bool isRectCross(const QRect& rect1, const QRect& rect2)
 {
@@ -50,4 +41,21 @@ inline bool isPosInRect(const QPoint& pos, const QRect& rect)
     return false;
 }
 
-#endif // FRAME_H
+inline unsigned int getPowerOf2Value(unsigned int uVal)
+{
+    int nCount = 0;
+    unsigned int uTemp = uVal;
+    while(uTemp)
+    {
+        uTemp = uTemp >> 1;
+        nCount++;
+    }
+
+    if (uVal == (1 << (nCount - 1)))
+    {
+        return uVal;
+    }
+    return 1 << nCount;
+}
+
+#endif // UTIL_H

@@ -8,6 +8,7 @@
 #define ATTRIBUTEWIDGET_H
 
 #include <QHash>
+#include <QList>
 #include <QTreeWidget>
 
 class Frame;
@@ -15,25 +16,25 @@ class FrameCollector;
 
 class AttributeWidget : public QTreeWidget
 {
-    enum { image_item, x_item, y_item, width_item, height_item };
+    enum { name_item, x_item, y_item, width_item, height_item };
     Q_OBJECT
 public:
     explicit AttributeWidget(FrameCollector* pCollector, QWidget *parent = NULL);
 
 public slots:
-    void updateDomElement(QTreeWidgetItem *item, int column);
+    void onFrameItemSelected(int index);
+    void onItemValuedChanged(QTreeWidgetItem *item, int column);
     void refresh();
-
-signals:
-    void contentWasModified();
+    void updateFrameElement(int index);
 
 private:
-    void parseFrameElement(Frame* pFrame, QTreeWidgetItem *parentItem = NULL);
-    QTreeWidgetItem* createItem(Frame* pFrame, QTreeWidgetItem* parentItem);
+    void parseFrameElement(int frameIndex, QTreeWidgetItem *parentItem = NULL);
+    QTreeWidgetItem* createItem(int frameIndex, QTreeWidgetItem* parentItem);
 
 private:
     FrameCollector* m_pCollector;
-    QHash<QTreeWidgetItem*, Frame*> m_hashElement;
+    QHash<QTreeWidgetItem*, int> m_hashElement;
+    QList<QTreeWidgetItem*> m_frameElement;
 };
 
 #endif // ATTRIBUTEWIDGET_H

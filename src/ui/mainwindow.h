@@ -30,17 +30,16 @@ public slots:
     bool open();
     bool save();
     bool saveAs();
-
     void adjustSize();
+    void clearup();
     void importImages();
+    void exportImages();
 
-    void contentWasModify();
-
+    void onContentWasModify();
 private:
     bool loadFile(QString& file);
     bool saveFile(QString& file);
     void importImageFiles(QString& directory);
-    void clearup();
 
 private:
     void readSettings();
@@ -52,26 +51,32 @@ private:
     void setupMenus();
     void setupWidgets();
     void setupDockWidgets();
+    void connectFrameCollector();
+    void disconnectFrameCollector();
 
     void setCurrentFile(const QString &fileName);
     static QString strippedName(const QString &fullFileName);
-
-    bool isModified() const;
-    void setModified(bool val);
 
 private:
     // menu
     QMenu* m_pFileMenu;
     QMenu* m_pEditMenu;
     QMenu* m_pWindowMenu;
+    QMenu* m_pSettingMenu;
 
     //menu actions
+    // File
     QAction* m_pActionOpen;
     QAction* m_pActionSave;
     QAction* m_pActionSaveAs;
     QAction* m_pActionClose;
     QAction* m_pActionImport;
+    QAction* m_pActionExport;
+    // Edit
     QAction* m_pActionAjustSize;
+    QAction* m_pActionClear;
+    // Setting
+    QAction* m_pActionSetting;
 
     QString m_curFile;
 
@@ -83,8 +88,6 @@ private:
     AttributeWidget* m_pAttrWidget;
 
     FrameCollector* m_pFrameCollector;
-
-    bool m_isModified;
 };
 
 #endif // MAINWINDOW_H

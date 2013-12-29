@@ -4,9 +4,10 @@
  *  email to newma@live.cn
  */
 #include <QtGui>
-#include "frame.h"
-#include "framecollector.h"
+#include "core/frame.h"
+#include "core/framecollector.h"
 #include "workplacewidget.h"
+#include "core/alignalgorithm.h"
 
 #define MIME_DATA_TYPE "image/plist-rw"
 
@@ -34,9 +35,13 @@ void WorkPlaceWidget::setCollector(FrameCollector *pCollector)
 void WorkPlaceWidget::updateContent()
 {
     update(QRect(QPoint(0, 0), m_pCollector->getSize()));
-    int w = m_pCollector->getSize().width();
-    int h = m_pCollector->getSize().height();
-    setMinimumSize(QSize(w + 1, h + 1));
+}
+
+void WorkPlaceWidget::updateContentSize(QSize size)
+{
+    QSize contentSize = m_pCollector->getSize() + QSize(1, 1);
+    update();
+    setMinimumSize(contentSize);
 }
 
 void WorkPlaceWidget::dragEnterEvent(QDragEnterEvent *event)
@@ -102,7 +107,9 @@ void WorkPlaceWidget::dropEvent(QDropEvent *event)
 
         QPixmap image;
         QString name;
-        dataStream >> image >> name;
+        int index;
+
+        dataStream >> image >> name >> index;
 
         QRect target = NormalAlignAlgorithm::findPropertyPlace(*m_pCollector, event->pos(), image.size());
 
@@ -110,14 +117,19 @@ void WorkPlaceWidget::dropEvent(QDropEvent *event)
         {
             break;
         }
-        m_pCollector->addFrame(image, name, target);
-
-        update(target);
+        if (event->source() != this)
+        {
+            m_pCollector->addFrame(image, name, target, true);
+        }
+        else
+        {
+            const Frame* pFrame = m_pCollector->getFrameByIndex(index);
+            m_pCollector->updateFrame(index, pFrame->image, pFrame->name, target, true);
+       }
 
         event->setDropAction(Qt::MoveAction);
         event->accept();
 
-        emit contentWasModify();
         return;
     }while(0);
 
@@ -135,14 +147,12 @@ void WorkPlaceWidget::mousePressEvent(QMouseEvent *event)
     QString name = pFrame->name;
     QPixmap pixmap = pFrame->image;
     QRect rect = pFrame->rect;
-    m_pCollector->removeFrameByIndex(found);
-
-    update(rect);
+    m_pCollector->updateFrameValid(found, false);
 
     QByteArray itemData;
     QDataStream dataStream(&itemData, QIODevice::WriteOnly);
 
-    dataStream << pixmap << name;
+    dataStream << pixmap << name << found;
 
     QMimeData *mimeData = new QMimeData;
     mimeData->setData(MIME_DATA_TYPE, itemData);
@@ -152,10 +162,17 @@ void WorkPlaceWidget::mousePressEvent(QMouseEvent *event)
     drag->setHotSpot(rect.center() - rect.topLeft());
     drag->setPixmap(pixmap);
 
-    if (!(drag->exec(Qt::MoveAction) == Qt::MoveAction)) {
-        m_pCollector->addFrame(pixmap, name, rect);
-        update(rect);
-   }
+    if (!(drag->exec(Qt::MoveAction) == Qt::MoveAction))
+    {
+        m_pCollector->updateFrameValid(found, true);
+    }
+    else
+    {
+        if (drag->target() != this)
+        {
+            m_pCollector->removeFrameByIndex(found);
+        }
+    }
 }
 
 void WorkPlaceWidget::paintEvent(QPaintEvent *event)
@@ -179,10 +196,13 @@ void WorkPlaceWidget::paintEvent(QPaintEvent *event)
     painter.setBrush(oldBrush);
     painter.setPen(oldPen);
 
-    FrameCollector::iterator it = m_pCollector->begin();
-    for (; it < m_pCollector->end(); ++it)
+    FrameCollector::const_iterator it = m_pCollector->constBegin();
+    for (; it < m_pCollector->constEnd(); ++it)
     {
-        Frame* pFrame = *it;
-        painter.drawPixmap(pFrame->rect, pFrame->image);
+        const Frame* pFrame = *it;
+        if (pFrame->bValid)
+        {
+            painter.drawPixmap(pFrame->rect, pFrame->image);
+        }
     }
 }

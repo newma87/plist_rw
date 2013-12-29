@@ -90,7 +90,8 @@ void ImageListWidget::dropEvent(QDropEvent *event)
         QDataStream dataStream(&pieceData, QIODevice::ReadOnly);
         QPixmap pixmap;
         QString name;
-        dataStream >> pixmap >> name;
+        int index = -1;
+        dataStream >> pixmap >> name >> index;
 
         addImage(pixmap, name);
 
@@ -111,8 +112,8 @@ void ImageListWidget::startDrag(Qt::DropActions supportedActions)
     QDataStream dataStream(&itemData, QIODevice::WriteOnly);
     QPixmap pixmap = qvariant_cast<QPixmap>(item->data(Qt::UserRole));
     QString name = qvariant_cast<QString>(item->data(Qt::UserRole + 1));
-
-    dataStream << pixmap << name;
+    int index = -1;
+    dataStream << pixmap << name << index;
 
     QMimeData *mimeData = new QMimeData;
     mimeData->setData(MIME_DATA_TYPE, itemData);

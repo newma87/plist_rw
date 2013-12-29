@@ -13,11 +13,21 @@
 
 struct Frame;
 
-class FrameCollector
+class FrameCollector : public QObject
 {
-public:
+    Q_OBJECT
+private:
     FrameCollector();
+public:
+    static FrameCollector* instance();
     ~FrameCollector();
+
+signals:
+    void frameChanged(int index);
+    void frameAdded(int index);
+    void frameRemoved(int index, const Frame& frame);
+    void sizeChanged(QSize newSize);
+    void contentWasModified();
 
 public:
     static const int DEFAULT_IMAGE_SIZE = 1024;
@@ -34,7 +44,7 @@ public:
     QSize adjustSize(bool bPowerOf2 = true, bool bEqualSide = true);
 
 public:
-    void addFrame(const QPixmap& image, const QString& name, const QRect& rect);
+    void addFrame(const QPixmap& image, const QString& name, const QRect& rect, bool bValid = true);
     void addFrame(Frame* pFrame);
 
     const Frame* getFrameByIndex(int index) const;
@@ -45,21 +55,17 @@ public:
     int findFrameByPosition(const QPoint &pos) const;
     bool findFramesInRect(const QRect& rect, QList<Frame*>* pResultFrames = NULL) const;
 
-    Frame* valueAt(int index) const; // only used when you want to chang the value in list
+    void updateFrame(int index, const QPixmap& image, const QString& name, const QRect& rect, bool bValid);
+    void updateFrame(int index, const Frame* pFrame);
+    void updateFrameName(int index, const QString& name);
+    void updateFrameImage(int index, const QPixmap& image);
+    void updateFrameRect(int index, const QRect& rect);
+    void updateFrameValid(int index, bool bValid);
 
     // clear all the stuff in this collector
     void clear();
 public:
-    typedef QList<Frame*>::iterator iterator;
     typedef QList<Frame*>::const_iterator const_iterator;
-    iterator begin()
-    {
-        return m_frames.begin();
-    }
-    iterator end()
-    {
-        return m_frames.end();
-    }
 
     const_iterator constBegin() const
     {
@@ -84,28 +90,30 @@ public:
     {
         m_imageWidth = size.width();
         m_imageHeight = size.height();
+
+        setModified(true);
+        emit sizeChanged(QSize(m_imageWidth, m_imageHeight));
+    }
+
+    bool isModified() const
+    {
+        return m_bIsModified;
+    }
+
+    void setModified(bool val)
+    {
+        m_bIsModified = val;
+        emit contentWasModified();
     }
 
 private:
+    static FrameCollector* m_pInstance;
+
     int m_imageWidth;
     int m_imageHeight;
+    bool m_bIsModified;
 
     QList<Frame*> m_frames;
-};
-
-class NormalAlignAlgorithm
-{
-public:
-    enum {
-        algin_lenth = 5   // align base lenth (pixel)
-    };
-
-    static QRect findPropertyPlace(const FrameCollector& collector, const QPoint& mousePos, const QSize& imageSize);
-    static QRect findPropertyPlace(const FrameCollector& collector, const QRect& imageRect);
-
-protected:
-    static QRect adjustRectInRange(const QRect& target, const QRect& ragneRect);
-    static int nearAlign(int l1, int l2, int base, int* translate_dist);
 };
 
 #endif // FRAMECOLLECTOR_H

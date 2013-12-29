@@ -11,6 +11,7 @@
 #include <QList>
 #include <QWidget>
 
+class Frame;
 class FrameCollector;
 
 class WorkPlaceWidget : public QWidget
@@ -24,9 +25,7 @@ public:
 
 public slots:
     void updateContent();
-
-signals:
-    void contentWasModify();
+    void updateContentSize(QSize size);
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event);

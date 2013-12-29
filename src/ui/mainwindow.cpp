@@ -6,16 +6,17 @@
 #include <QtGui>
 #include <stdlib.h>
 
-#include "framecollector.h"
+#include "core/frame.h"
+#include "core/framecollector.h"
 #include "mainwindow.h"
 
 #include "io/plistxmlreader.h"
 #include "io/plistxmlwriter.h"
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), m_isModified(false)
+    : QMainWindow(parent)
 {    
-    m_pFrameCollector = new FrameCollector();
+    m_pFrameCollector = FrameCollector::instance();
 
     setupActions();
     setupMenus();
@@ -24,6 +25,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     readSettings();
     setCurrentFile("");
+
+    connectFrameCollector();
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -43,7 +46,7 @@ bool MainWindow::open()
 {
     if (checkSaved())
     {
-        QString fileName = QFileDialog::getOpenFileName(this);
+        QString fileName = QFileDialog::getOpenFileName(this, tr("open plist file"), tr(""), QString("*.plist"));
         if (!fileName.isEmpty())
         {
             return loadFile(fileName);
@@ -55,7 +58,7 @@ bool MainWindow::open()
 
 bool MainWindow::save()
 {
-    if (!isModified())
+    if (!m_pFrameCollector->isModified())
     {
         return true;
     }
@@ -72,7 +75,7 @@ bool MainWindow::save()
 
 bool MainWindow::saveAs()
 {
-    QString fileName = QFileDialog::getSaveFileName(this);
+    QString fileName = QFileDialog::getSaveFileName(this, tr("save plist file"));
     if (!fileName.isEmpty())
     {
         return saveFile(fileName);
@@ -83,12 +86,21 @@ bool MainWindow::saveAs()
 void MainWindow::adjustSize()
 {
     m_pFrameCollector->adjustSize(true, false);
-    contentWasModify();
+}
+
+void MainWindow::clearup()
+{
+    m_pFrameCollector->clear();
+    m_pFrameCollector->setModified(true);
+    m_pWorkplace->updateContent();
+    m_pAttrWidget->refresh();
+
+    onContentWasModify();
 }
 
 void MainWindow::importImages()
 {
-    QString directName = QFileDialog::getExistingDirectory(this);
+    QString directName = QFileDialog::getExistingDirectory(this, tr("import image source"));
     if (!directName.isEmpty())
     {
 #ifndef QT_NO_CURSOR
@@ -105,11 +117,37 @@ void MainWindow::importImages()
     }
 }
 
-void MainWindow::contentWasModify()
+void MainWindow::exportImages()
 {
-    setModified(true);
-    m_pWorkplace->updateContent();
-    m_pAttrWidget->refresh();
+    QString directName = QFileDialog::getExistingDirectory(this, tr("export images"));
+    if (!directName.isEmpty())
+    {
+#ifndef QT_NO_CURSOR
+        QApplication::setOverrideCursor(Qt::WaitCursor);
+#endif
+
+        FrameCollector::const_iterator it = m_pFrameCollector->constBegin();
+        for (; it != m_pFrameCollector->constEnd(); ++it)
+        {
+            const Frame* pFrame = *it;
+            if (pFrame->bValid)
+            {
+                QString savePath = directName + "/" + pFrame->name;
+                pFrame->image.toImage().save(savePath, "PNG");
+            }
+        }
+
+        QMessageBox::information(this, tr("Export Image"), tr("Export images done!"));
+
+#ifndef QT_NO_CURSOR
+        QApplication::restoreOverrideCursor();
+#endif
+    }
+}
+
+void MainWindow::onContentWasModify()
+{
+    this->setWindowModified(m_pFrameCollector->isModified());
 }
 
 bool MainWindow::loadFile(QString &file)
@@ -119,17 +157,22 @@ bool MainWindow::loadFile(QString &file)
     QApplication::setOverrideCursor(Qt::WaitCursor);
 #endif
 
+    disconnectFrameCollector();
+
     PlistXmlReader reader(m_pFrameCollector);
 
     if (reader.read(file))
     {
-        setModified(false);
-        m_pWorkplace->updateContent();
-        m_pAttrWidget->refresh();
-
         setCurrentFile(file);
         bRet = true;
     }
+
+    connectFrameCollector();
+
+    m_pWorkplace->updateContent();
+    m_pAttrWidget->refresh();
+
+    m_pActionExport->setDisabled(false);
 
 #ifndef QT_NO_CURSOR
      QApplication::restoreOverrideCursor();
@@ -149,7 +192,6 @@ bool MainWindow::saveFile(QString &file)
     PlistXmlWriter writer(m_pFrameCollector);
     if (writer.write(file))
     {
-        setModified(false);
         setCurrentFile(file);
         bRet = true;
     }
@@ -166,13 +208,9 @@ void MainWindow::importImageFiles(QString &directory)
     m_pImageslist->initWithDirectory(directory);
 }
 
-void MainWindow::clearup()
-{
-}
-
 bool MainWindow::checkSaved()
 {
-    if (isModified())
+    if (m_pFrameCollector->isModified())
     {
         QMessageBox::StandardButton ret;
         ret = QMessageBox::warning(this, tr("plist_rw"),
@@ -224,14 +262,23 @@ void MainWindow::setupActions()
     m_pActionClose = new QAction(tr("&Exit..."), this);
     m_pActionClose->setShortcut(QKeySequence::Close);
     m_pActionImport = new QAction(tr("&Import Images..."), this);
+    m_pActionImport->setToolTip(tr("import image source"));
+    m_pActionExport = new QAction(tr("&Export To Images..."), this);
+    m_pActionExport->setToolTip(tr("break current image to pieces and export"));
+    m_pActionExport->setDisabled(true);
     m_pActionAjustSize = new QAction(tr("&Adjust Size"), this);
+    m_pActionAjustSize->setToolTip(tr("will resize current image in power of 2"));
+    m_pActionClear = new QAction(tr("&Clear"), this);
+    m_pActionClear->setToolTip("clear current image");
 
     connect(m_pActionOpen, SIGNAL(triggered()), this, SLOT(open()));
     connect(m_pActionSave, SIGNAL(triggered()), this, SLOT(save()));
     connect(m_pActionSaveAs, SIGNAL(triggered()), this, SLOT(saveAs()));
     connect(m_pActionClose, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(m_pActionImport, SIGNAL(triggered()), this, SLOT(importImages()));
+    connect(m_pActionExport, SIGNAL(triggered()), this, SLOT(exportImages()));
     connect(m_pActionAjustSize, SIGNAL(triggered()), this, SLOT(adjustSize()));
+    connect(m_pActionClear, SIGNAL(triggered()), this, SLOT(clearup()));
 }
 
 void MainWindow::setupMenus()
@@ -241,9 +288,11 @@ void MainWindow::setupMenus()
     m_pFileMenu->addAction(m_pActionSave);
     m_pFileMenu->addAction(m_pActionSaveAs);
     m_pFileMenu->addAction(m_pActionImport);
+    m_pFileMenu->addAction(m_pActionExport);
     m_pFileMenu->addAction(m_pActionClose);
 
     m_pEditMenu = menuBar()->addMenu(tr("&Edit"));
+    m_pEditMenu->addAction(m_pActionClear);
     m_pEditMenu->addAction(m_pActionAjustSize);
 
     m_pWindowMenu = menuBar()->addMenu(tr("&Window"));
@@ -259,8 +308,6 @@ void MainWindow::setupWidgets()
     pScroll->setWidgetResizable(true);
 
     setCentralWidget(pScroll);
-
-    connect(m_pWorkplace, SIGNAL(contentWasModify()), this, SLOT(contentWasModify()));
 }
 
 void MainWindow::setupDockWidgets()
@@ -271,7 +318,6 @@ void MainWindow::setupDockWidgets()
     m_pAttrwidget_dock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     addDockWidget(Qt::LeftDockWidgetArea, m_pAttrwidget_dock);
     m_pWindowMenu->addAction(m_pAttrwidget_dock->toggleViewAction());
-    connect(m_pAttrWidget, SIGNAL(contentWasModified()), this, SLOT(contentWasModify()));
 
     m_pImagelist_dock = new QDockWidget(tr("images"), this);
     m_pImageslist = new ImageListWidget(this);
@@ -282,10 +328,41 @@ void MainWindow::setupDockWidgets()
     m_pImagelist_dock->hide();
 }
 
+void MainWindow::connectFrameCollector()
+{
+    connect(m_pFrameCollector, SIGNAL(contentWasModified()), this, SLOT(onContentWasModify()));
+
+    connect(m_pFrameCollector, SIGNAL(frameAdded(int)), m_pWorkplace, SLOT(updateContent()));
+    connect(m_pFrameCollector, SIGNAL(frameRemoved(int,Frame)), m_pWorkplace, SLOT(updateContent()));
+    connect(m_pFrameCollector, SIGNAL(frameChanged(int)), m_pWorkplace, SLOT(updateContent()));
+    connect(m_pFrameCollector, SIGNAL(sizeChanged(QSize)), m_pWorkplace, SLOT(updateContentSize(QSize)));
+
+    connect(m_pFrameCollector, SIGNAL(frameAdded(int)), m_pAttrWidget, SLOT(refresh()));
+    connect(m_pFrameCollector, SIGNAL(frameRemoved(int,Frame)), m_pAttrWidget, SLOT(refresh()));
+    connect(m_pFrameCollector, SIGNAL(frameChanged(int)), m_pAttrWidget, SLOT(updateFrameElement(int)));
+    connect(m_pFrameCollector, SIGNAL(sizeChanged(QSize)), m_pAttrWidget, SLOT(refresh()));
+}
+
+void MainWindow::disconnectFrameCollector()
+{
+    disconnect(m_pFrameCollector, SIGNAL(contentWasModified()), this, SLOT(onContentWasModify()));
+
+    disconnect(m_pFrameCollector, SIGNAL(frameAdded(int)), m_pWorkplace, SLOT(updateContent()));
+    disconnect(m_pFrameCollector, SIGNAL(frameRemoved(int,Frame)), m_pWorkplace, SLOT(updateContent()));
+    disconnect(m_pFrameCollector, SIGNAL(frameChanged(int)), m_pWorkplace, SLOT(updateContent()));
+    disconnect(m_pFrameCollector, SIGNAL(sizeChanged(QSize)), m_pWorkplace, SLOT(updateContent()));
+
+    disconnect(m_pFrameCollector, SIGNAL(frameAdded(int)), m_pAttrWidget, SLOT(refresh()));
+    disconnect(m_pFrameCollector, SIGNAL(frameRemoved(int,Frame)), m_pAttrWidget, SLOT(refresh()));
+    disconnect(m_pFrameCollector, SIGNAL(frameChanged(int)), m_pAttrWidget, SLOT(updateFrameElement(int)));
+    disconnect(m_pFrameCollector, SIGNAL(sizeChanged(QSize)), m_pAttrWidget, SLOT(refresh()));
+}
+
 void MainWindow::setCurrentFile(const QString &fileName)
 {
     m_curFile = fileName;
     setWindowModified(false);
+    m_pFrameCollector->setModified(false);
 
     QString shownName = strippedName(m_curFile);
     if (m_curFile.isEmpty())
@@ -296,15 +373,4 @@ void MainWindow::setCurrentFile(const QString &fileName)
 QString MainWindow::strippedName(const QString &fullFileName)
 {
     return QFileInfo(fullFileName).fileName();
-}
-
-bool MainWindow::isModified() const
-{
-    return m_isModified;
-}
-
-void MainWindow::setModified(bool val)
-{
-    m_isModified = val;
-    setWindowModified(val);
 }

@@ -10,8 +10,8 @@
 #include <map>
 
 #include "io/plistxmlreader.h"
-#include "frame.h"
-#include "framecollector.h"
+#include "core/frame.h"
+#include "core/framecollector.h"
 
 #include "boost/any.hpp"
 #include "io/Plist.hpp"
@@ -68,6 +68,7 @@ static bool readFrames(const dictionary& dict, const QPixmap& image, FrameCollec
     {
         Frame* pFrame = new Frame();
         pFrame->name = it->first.c_str();
+        pFrame->bValid = true;
         if (readFrame(boost::any_cast<const dictionary&>(it->second), image, pFrame))
         {
             pCollector->addFrame(pFrame);

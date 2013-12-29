@@ -10,8 +10,8 @@
 #include <string>
 
 #include "io/plistxmlwriter.h"
-#include "frame.h"
-#include "framecollector.h"
+#include "core/frame.h"
+#include "core/framecollector.h"
 
 #include "boost/any.hpp"
 #include "io/Plist.hpp"

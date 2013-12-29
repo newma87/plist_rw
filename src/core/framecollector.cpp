@@ -5,25 +5,22 @@
  */
 
 #include <QtGui>
-#include "frame.h"
-#include "framecollector.h"
+#include "core/frame.h"
+#include "core/framecollector.h"
+#include "util/util.h"
 
-#define MAX(a, b) ((a) >= (b) ? (a) : (b))
-#define MIN(a, b) ((a) <= (b) ? (a) : (b))
-
-inline unsigned int get2PowerValue(unsigned int uVal)
+FrameCollector* FrameCollector::m_pInstance = NULL;
+FrameCollector *FrameCollector::instance()
 {
-    int nCount = 0;
-    while(uVal)
+    if (!m_pInstance)
     {
-        uVal = uVal >> 1;
-        nCount++;
+        m_pInstance = new FrameCollector();
     }
 
-    return (unsigned int)(1 << nCount);
+    return m_pInstance;
 }
 
-FrameCollector::FrameCollector() : m_imageWidth(DEFAULT_IMAGE_SIZE), m_imageHeight(DEFAULT_IMAGE_SIZE)
+FrameCollector::FrameCollector() : m_imageWidth(DEFAULT_IMAGE_SIZE), m_imageHeight(DEFAULT_IMAGE_SIZE), m_bIsModified(false)
 {
     clear();
 }
@@ -45,7 +42,10 @@ bool FrameCollector::getImage(QImage** ppImage) const
     QPainter paint(*ppImage);
     foreach(Frame* pF, m_frames)
     {
-        paint.drawPixmap(pF->rect, pF->image);
+        if (pF->bValid)
+        {
+            paint.drawPixmap(pF->rect, pF->image);
+        }
     }
 
     return true;
@@ -53,6 +53,11 @@ bool FrameCollector::getImage(QImage** ppImage) const
 
 QRect FrameCollector::getSmallestRangeRect() const
 {
+    if (m_frames.count() == 0)
+    {
+        return QRect(0, 0, m_imageWidth, m_imageHeight);
+    }
+
     int minX = m_frames[0]->rect.x();
     int maxX = minX;
     int minY = m_frames[0]->rect.y();
@@ -103,14 +108,14 @@ QSize FrameCollector::adjustSize(bool bPowerOf2, bool bEqualSide)
         int w = retSize.width();
         int h = retSize.height();
 
-        w = (int)get2PowerValue((unsigned int) w);
+        w = (int)getPowerOf2Value((unsigned int) w);
         if (w == h)
         {
             h = w;
         }
         else
         {
-            h = (int)get2PowerValue((unsigned int) h);
+            h = (int)getPowerOf2Value((unsigned int) h);
         }
         retSize =QSize(w, h);
     }
@@ -119,13 +124,17 @@ QSize FrameCollector::adjustSize(bool bPowerOf2, bool bEqualSide)
     return retSize;
 }
 
-void FrameCollector::addFrame(const QPixmap &image, const QString &name, const QRect &rect)
+void FrameCollector::addFrame(const QPixmap &image, const QString &name, const QRect &rect, bool bValid)
 {
     Frame* pFrame = new Frame();
     pFrame->image = image;
     pFrame->name = name;
     pFrame->rect = rect;
+    pFrame->bValid = bValid;
     m_frames.append(pFrame);
+
+    setModified(true);
+    emit frameAdded(m_frames.count() - 1);
 }
 
 void FrameCollector::addFrame(Frame *pFrame)
@@ -133,12 +142,19 @@ void FrameCollector::addFrame(Frame *pFrame)
     if (pFrame)
     {
         m_frames.append(pFrame);
+        setModified(true);
+        emit frameAdded(m_frames.count() - 1);
     }
 }
 
 const Frame* FrameCollector::getFrameByIndex(int index) const
 {
-    return valueAt(index);
+    if (index < 0 || index >= m_frames.count())
+    {
+        //todo warning;
+        return NULL;
+    }
+    return m_frames[index];
 }
 
 void FrameCollector::removeFrameByIndex(int index)
@@ -148,8 +164,12 @@ void FrameCollector::removeFrameByIndex(int index)
         return;
     }
 
+    Frame frame = *m_frames[index];
     delete m_frames[index];
     m_frames.removeAt(index);
+
+    setModified(true);
+    emit frameRemoved(index, frame);
 }
 
 void FrameCollector::insertFrameBeforeIndex(int index, Frame* pFrame)
@@ -159,6 +179,9 @@ void FrameCollector::insertFrameBeforeIndex(int index, Frame* pFrame)
         return;
     }
     m_frames.insert(index, pFrame);
+
+    setModified(true);
+    emit frameAdded(m_frames.count() - 1);
 }
 
 int FrameCollector::findFrameByName(const QString &name) const
@@ -180,7 +203,7 @@ int FrameCollector::findFrameByPosition(const QPoint& pos) const
     int nCount = m_frames.count();
     for (int i = 0; i < nCount; i++)
     {
-        if (isPosInRect(pos, m_frames[i]->rect))
+        if (m_frames[i]->bValid && isPosInRect(pos, m_frames[i]->rect))
         {
             return i;
         }
@@ -192,7 +215,7 @@ bool FrameCollector::findFramesInRect(const QRect &rect, QList<Frame*> *pResultF
 {
     bool bRet = false;
     foreach (Frame* pFrame, m_frames) {
-        if (isRectCross(pFrame->rect, rect))
+        if (pFrame->bValid && isRectCross(pFrame->rect, rect))
         {
             if (!pResultFrames)
             {
@@ -205,181 +228,85 @@ bool FrameCollector::findFramesInRect(const QRect &rect, QList<Frame*> *pResultF
     return bRet;
 }
 
-Frame* FrameCollector::valueAt(int index) const
+void FrameCollector::updateFrame(int index, const QPixmap &image, const QString &name, const QRect &rect, bool bValid)
 {
     if (index < 0 || index >= m_frames.count())
     {
-        //todo warning;
-        return NULL;
+        return;
     }
-    return m_frames.value(index);
+    m_frames[index]->image = image;
+    m_frames[index]->name = name;
+    m_frames[index]->rect = rect;
+    m_frames[index]->bValid = bValid;
+    setModified(true);
+    emit frameChanged(index);
+}
+
+void FrameCollector::updateFrame(int index, const Frame *pFrame)
+{
+    if (index < 0 || index >= m_frames.count())
+    {
+        return;
+    }
+    *m_frames[index] = *pFrame;
+    setModified(true);
+    emit frameChanged(index);
+}
+
+void FrameCollector::updateFrameName(int index, const QString &name)
+{
+    if (index < 0 || index >= m_frames.count())
+    {
+        return;
+    }
+    m_frames[index]->name = name;
+
+    setModified(true);
+    emit frameChanged(index);
+}
+
+void FrameCollector::updateFrameImage(int index, const QPixmap &image)
+{
+    if (index < 0 || index >= m_frames.count())
+    {
+        return;
+    }
+    m_frames[index]->image = image;
+
+    setModified(true);
+    emit frameChanged(index);
+}
+
+void FrameCollector::updateFrameRect(int index, const QRect &rect)
+{
+    if (index < 0 || index >= m_frames.count())
+    {
+        return;
+    }
+    m_frames[index]->rect = rect;
+
+    setModified(true);
+    emit frameChanged(index);
+}
+
+void FrameCollector::updateFrameValid(int index, bool bValid)
+{
+    if (index < 0 || index >= m_frames.count())
+    {
+        return;
+    }
+    m_frames[index]->bValid = bValid;
+
+    setModified(true);
+    emit frameChanged(index);
 }
 
 void FrameCollector::clear()
 {
+    m_bIsModified = false;
     foreach (Frame* pF, m_frames)
     {
         delete pF;
     }
     m_frames.clear();
-}
-
-
-QRect NormalAlignAlgorithm::findPropertyPlace(const FrameCollector &collector, const QPoint &mousePos, const QSize &imageSize)
-{
-    return NormalAlignAlgorithm::findPropertyPlace(collector, QRect(mousePos.x() - imageSize.width() / 2, mousePos.y() - imageSize.height() / 2, imageSize.width(), imageSize.height()));
-}
-
-QRect NormalAlignAlgorithm::adjustRectInRange(const QRect& target, const QRect& rangeRect)
-{
-    if ((rangeRect.width() - target.width() < 0) || (rangeRect.height() - target.height() < 0))
-    {
-        //todo log, this situation is not allowed
-        return QRect();
-    }
-
-    int transX = 0;
-    int transY = 0;
-
-    if (target.left() < rangeRect.left())
-    {
-        transX = rangeRect.left() - target.left();
-    }
-
-    if (target.right() > rangeRect.right())
-    {
-        transX = rangeRect.right() - target.right();
-    }
-
-    if (target.top() < rangeRect.top())
-    {
-        transY = rangeRect.top() - target.top();
-    }
-
-    if (target.bottom() > rangeRect.bottom())
-    {
-        transY = rangeRect.bottom() - target.bottom();
-    }
-
-    return target.translated(transX, transY);
-}
-
-int NormalAlignAlgorithm::nearAlign(int l1, int l2, int base, int* translate_dist)
-{
-    int d1 = l1 - base;
-    int d2 = l2 - base;
-
-    int lenth = MIN(d1 * d1, d2 * d2);
-
-    if (lenth > (algin_lenth * algin_lenth))
-    {
-        return 0;
-    }
-
-    if (lenth == d1 * d1)
-    {
-        if (translate_dist)
-        {
-            *translate_dist = -d1;
-        }
-        return 1;
-    }
-    else
-    {
-        if (translate_dist)
-        {
-            *translate_dist = -d2;
-        }
-        return 2;
-    }
-
-    return 0;
-}
-
-QRect NormalAlignAlgorithm::findPropertyPlace(const FrameCollector &collector, const QRect &imageRect)
-{
-    QSize size = collector.getSize();
-    QRect rect = QRect(QPoint(0, 0), size);
-
-    QRect adjRect = NormalAlignAlgorithm::adjustRectInRange(imageRect, rect);
-    if (!adjRect.isValid())
-    {
-        //todo warning
-        return adjRect;
-    }
-
-    if (collector.count() <= 0)
-    {
-        return adjRect;
-    }
-
-    QList<Frame*> conflictList;
-    if (!collector.findFramesInRect(adjRect, &conflictList))
-    {
-        return adjRect;
-    }
-
-    QRect conflictRect = conflictList.front()->rect;
-
-    int transX = 0;
-    int transY = 0;
-
-    QPoint distance = adjRect.center() - conflictRect.center();
-
-    if (distance.x() * distance.x() >= distance.y() * distance.y())
-    {
-        if (distance.x() < 0)
-        {
-            transX = conflictRect.left() - adjRect.right() - 1;
-        }
-        else
-        {
-            transX = conflictRect.right() + 1 - adjRect.left();
-        }
-
-        // vertical align
-        // attention: rect.left() and rect.righ() is still in rect. Otherwise rect.right() - rect.left() = rect().width - 1. The same to top and bottom.
-        if (!NormalAlignAlgorithm::nearAlign(adjRect.top(), adjRect.bottom() + 1, conflictRect.top(), &transY))
-        {
-            NormalAlignAlgorithm::nearAlign(adjRect.top(), adjRect.bottom() + 1, conflictRect.bottom() + 1, &transY);
-        }
-    }
-    else
-    {
-        if (distance.y() < 0)
-        {
-            transY = conflictRect.top() - adjRect.bottom() - 1;
-        }
-        else
-        {
-            transY = conflictRect.bottom() + 1 - adjRect.top();
-        }
-
-        //horizontal align
-        // attention: rect.left() and rect.righ() is still in rect. Otherwise rect.right() - rect.left() = rect().width - 1. The same to top and bottom.
-        if (!NormalAlignAlgorithm::nearAlign(adjRect.left(), adjRect.right() + 1, conflictRect.left(), &transX))
-        {
-            NormalAlignAlgorithm::nearAlign(adjRect.left(), adjRect.right() + 1, conflictRect.right() + 1, &transX);
-        }
-    }
-
-    if (!collector.findFramesInRect(adjRect.translated(transX, transY)))
-    {
-        return adjRect.translated(transX, transY);
-    }
-
-    if (transX != 0 && transY != 0)
-    {
-        if (!collector.findFramesInRect(adjRect.translated(transX, 0)))
-        {
-            return adjRect.translated(transX, 0);
-        }
-
-        if (!collector.findFramesInRect(adjRect.translated(0, transY)))
-        {
-            return adjRect.translated(0, transY);
-        }
-    }
-
-    return QRect();
 }
